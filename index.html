@@ -4,60 +4,114 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>SafeRoute — Demo Pro (Single File)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
   :root{
-    --card-bg: #ffffff;
-    --text: #222;
-    --primary: #1976d2;
+    --card-bg: rgba(255,255,255,0.9);
+    --text: #10202b;
+    --primary: #0a7f6f;
+    --accent: #ff6b35;
+    --muted: #5e6d78;
+    --surface: #edf6f4;
   }
   [data-theme="dark"]{
-    --card-bg: #0f1720;
+    --card-bg: rgba(14,23,31,0.88);
     --text: #e6eef6;
+    --primary: #3ad1bd;
+    --accent: #ffa366;
+    --muted: #adc1d0;
+    --surface: #132533;
   }
-  html,body{height:100%;margin:0;font-family:Inter,Arial,Helvetica,sans-serif;color:var(--text)}
+  html,body{height:100%;margin:0;font-family:"Space Grotesk",Segoe UI,Tahoma,sans-serif;color:var(--text);background:radial-gradient(circle at 10% 10%, #d8f1eb 0%, #e8f0ff 35%, #f7f3ea 100%)}
   #map{position:absolute;inset:0}
   .top-floating{
     position:absolute;left:16px;top:16px;z-index:1200;
-    background:var(--card-bg);padding:12px;border-radius:10px;box-shadow:0 8px 30px rgba(8,15,30,0.12);
-    display:flex;gap:10px;align-items:center;min-width:420px;
+    background:var(--card-bg);padding:14px;border-radius:16px;box-shadow:0 16px 40px rgba(8,15,30,0.18);
+    backdrop-filter: blur(12px);
+    display:flex;flex-direction:column;gap:10px;min-width:430px;max-width:calc(100vw - 32px);
+    border:1px solid rgba(255,255,255,0.4);
+    animation: panelIn 320ms ease-out;
   }
+  @keyframes panelIn { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .title-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .app-title{font-size:18px;font-weight:700;letter-spacing:0.2px}
+  .app-subtitle{font-size:12px;color:var(--muted)}
+  .search-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
+  .input-wrap{position:relative}
   .search-input{
-    background:transparent;border:1px solid #d0d7de;padding:8px 10px;border-radius:8px;width:300px;font-size:14px;color:var(--text)
+    box-sizing:border-box;width:100%;
+    background:var(--surface);border:1px solid #c7d8df;padding:10px 12px;border-radius:10px;font-size:14px;color:var(--text)
   }
-  .btn{background:var(--primary);border:none;color:white;padding:9px 12px;border-radius:8px;cursor:pointer;font-weight:600}
-  .btn.secondary{background:#4caf50}
-  .small{font-size:12px;color:#666}
+  .btn{background:var(--primary);border:none;color:white;padding:9px 12px;border-radius:10px;cursor:pointer;font-weight:700;letter-spacing:0.2px}
+  .btn:disabled{opacity:0.7;cursor:not-allowed}
+  .btn.secondary{background:#2f8f6b}
+  .btn.accent{background:var(--accent)}
+  .small{font-size:12px;color:var(--muted)}
+  .action-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .status-chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{font-size:11px;padding:4px 8px;border-radius:999px;background:#d8ebe7;color:#245b50;font-weight:600}
   #banner{position:absolute;left:50%;transform:translateX(-50%);top:86px;z-index:1200;padding:10px 16px;border-radius:10px;background:#d32f2f;color:white;font-weight:700;display:none;box-shadow:0 10px 30px rgba(0,0,0,0.15)}
   .controls-right{position:absolute;right:16px;top:16px;z-index:1200;display:flex;flex-direction:column;gap:10px}
-  .control-card{background:var(--card-bg);padding:10px;border-radius:10px;box-shadow:0 8px 20px rgba(8,15,30,0.08)}
+  .control-card{background:var(--card-bg);padding:10px;border-radius:12px;box-shadow:0 10px 24px rgba(8,15,30,0.12);backdrop-filter:blur(10px)}
   .legend{position:absolute;left:16px;bottom:16px;z-index:1200;background:var(--card-bg);padding:8px;border-radius:8px;box-shadow:0 8px 20px rgba(8,15,30,0.08)}
   .dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:middle}
-  #directionsPanel{position:absolute;right:16px;bottom:80px;z-index:1200;width:320px;max-height:48vh;overflow:auto;background:var(--card-bg);padding:10px;border-radius:8px;box-shadow:0 8px 30px rgba(8,15,30,0.12);display:none}
-  #autocomplete-list{position:absolute;left:16px;top:66px;z-index:1300;max-height:240px;overflow:auto;background:var(--card-bg);border-radius:8px;padding:8px;box-shadow:0 8px 30px rgba(0,0,0,0.12);display:none}
+  #directionsPanel{position:absolute;right:16px;bottom:80px;z-index:1200;width:340px;max-height:48vh;overflow:auto;background:var(--card-bg);padding:12px;border-radius:12px;box-shadow:0 10px 30px rgba(8,15,30,0.16);display:none}
+  .autocomplete-list{position:absolute;left:0;right:0;top:43px;z-index:1300;max-height:220px;overflow:auto;background:var(--card-bg);border-radius:8px;padding:8px;box-shadow:0 8px 30px rgba(0,0,0,0.12);display:none;border:1px solid rgba(0,0,0,0.05)}
   .ac-item{padding:8px;border-radius:6px;cursor:pointer}
   .ac-item:hover{background:#f0f4f8}
-  .muted{font-size:12px;color:#666}
+  .ac-item.active{background:#e3f2fd}
+  .muted{font-size:12px;color:var(--muted)}
   .car-btn{background:#ff6f00;padding:8px;border-radius:8px;color:#fff;border:none;cursor:pointer;font-weight:700}
+  @media (max-width: 768px){
+    .top-floating{min-width:0;right:16px;flex-wrap:wrap}
+    .search-grid{grid-template-columns:1fr}
+    .controls-right{top:auto;bottom:16px;right:16px}
+    #directionsPanel{left:16px;right:16px;bottom:160px;width:auto;max-height:40vh}
+  }
 </style>
 </head>
 <body data-theme="light">
 
 <!-- Floating search -->
 <div class="top-floating" id="searchCard">
-  <input id="searchBox" class="search-input" placeholder="Where from? Start typing (preset suggestions)" autocomplete="off" />
-  <div style="display:flex;flex-direction:column">
-    <div class="small muted" id="searchHint">Start → then Destination</div>
+  <div class="title-row">
+    <div>
+      <div class="app-title">SafeRoute Navigator</div>
+      <div class="app-subtitle">Smart routing around accident hotspots</div>
+    </div>
+    <div class="status-chips">
+      <span class="chip" id="riskChip">Risk: --</span>
+      <span class="chip" id="modeChip">Mode: Normal</span>
+    </div>
   </div>
-  <button class="btn" id="getRouteBtn">Get Safe Route</button>
-  <button class="btn secondary" id="clearBtn">Clear</button>
-</div>
 
-<!-- Autocomplete list (preset) -->
-<div id="autocomplete-list"></div>
+  <div class="search-grid">
+    <div class="input-wrap">
+      <input id="startBox" class="search-input" placeholder="Start address" autocomplete="off" />
+      <div id="startList" class="autocomplete-list"></div>
+    </div>
+    <div class="input-wrap">
+      <input id="endBox" class="search-input" placeholder="Destination address" autocomplete="off" />
+      <div id="endList" class="autocomplete-list"></div>
+    </div>
+  </div>
+
+  <div class="action-row">
+    <button class="btn" id="getRouteBtn">Get Safe Route</button>
+    <button class="btn accent" id="swapBtn">Swap</button>
+    <button class="btn secondary" id="clearBtn">Clear</button>
+    <div style="display:flex;flex-direction:column">
+      <div class="small muted" id="searchHint">Choose start and destination</div>
+      <div class="small muted" id="routeStatus">Idle</div>
+    </div>
+  </div>
+</div>
 
 <!-- Right-side controls -->
 <div class="controls-right">
@@ -214,49 +268,184 @@ let routeLine = null, visibleHotspots = [], allHotspotObjs = [];
 let carMarker = null, carAnimHandle = null;
 
 /* BUILD HOTSPOT MARKERS */
+function severityColor(severity){
+  return severity==='High' ? 'red' : (severity==='Medium' ? 'orange' : 'yellow');
+}
+
 accidentHotspots.forEach(h=>{
-  const color = h.severity==='High' ? 'red' : (h.severity==='Medium' ? 'orange' : 'yellow');
+  const color = severityColor(h.severity);
   const m = L.circleMarker([h.lat,h.lng], { radius:8, color, fillColor: color, fillOpacity:0.9 });
   m.bindPopup(`<b>${h.name}</b><br/>Severity: ${h.severity}`);
   allHotspotObjs.push({ m, data: h });
 });
 
 /* AUTOCOMPLETE UI */
-const searchBox = document.getElementById('searchBox');
-const acList = document.getElementById('autocomplete-list');
+const startBox = document.getElementById('startBox');
+const endBox = document.getElementById('endBox');
+const startList = document.getElementById('startList');
+const endList = document.getElementById('endList');
+const routeStatus = document.getElementById('routeStatus');
+const getRouteBtn = document.getElementById('getRouteBtn');
+const riskChip = document.getElementById('riskChip');
+const modeChip = document.getElementById('modeChip');
 let startPlace = null, endPlace = null;
-let acResults = [];
+let startResults = [], endResults = [];
+let startActiveIndex = -1, endActiveIndex = -1;
 
-function renderAC(results){
-  acList.innerHTML = '';
-  if(!results || !results.length){ acList.style.display='none'; return; }
-  acList.style.display='block';
+function setBusy(isBusy, text){
+  getRouteBtn.disabled = isBusy;
+  getRouteBtn.innerText = isBusy ? 'Routing...' : 'Get Safe Route';
+  routeStatus.innerText = text;
+}
+
+function updateRiskChip(found){
+  if(!found || !found.length){
+    riskChip.innerText = 'Risk: Low';
+    riskChip.style.background = '#d9efe6';
+    riskChip.style.color = '#225f4e';
+    return;
+  }
+  const highCount = found.filter(x => x.h.data.severity === 'High').length;
+  if(highCount >= 2){
+    riskChip.innerText = 'Risk: High';
+    riskChip.style.background = '#ffd7d7';
+    riskChip.style.color = '#8d1f1f';
+    return;
+  }
+  riskChip.innerText = 'Risk: Medium';
+  riskChip.style.background = '#ffe7cf';
+  riskChip.style.color = '#8f4e16';
+}
+
+function selectPlaceForField(field, place){
+  if(field === 'start'){
+    startPlace = place;
+    startBox.value = place.name;
+    startList.style.display = 'none';
+    routeStatus.innerText = `Start selected: ${place.name}`;
+  } else {
+    endPlace = place;
+    endBox.value = place.name;
+    endList.style.display = 'none';
+    routeStatus.innerText = `Destination selected: ${place.name}`;
+  }
+  if(startPlace && endPlace){
+    document.getElementById('searchHint').innerText='Ready — click Get Safe Route';
+    routeStatus.innerText = `Ready: ${startPlace.name} -> ${endPlace.name}`;
+  }
+}
+
+function renderAC(field, results){
+  const list = field === 'start' ? startList : endList;
+  list.innerHTML = '';
+  if(!results || !results.length){ list.style.display='none'; return; }
+  if(field === 'start') startActiveIndex = -1;
+  else endActiveIndex = -1;
+  list.style.display='block';
   results.slice(0,10).forEach((r, idx)=>{
     const div = document.createElement('div');
     div.className = 'ac-item';
     div.innerHTML = `<strong>${r.name}</strong><div class="muted small">${r.desc || ''}</div>`;
-    div.onclick = () => {
-      if(!startPlace){ startPlace = r; searchBox.value = r.name; document.getElementById('searchHint').innerText='Now choose Destination'; searchBox.placeholder='Enter Destination...'; searchBox.value=''; }
-      else { endPlace = r; searchBox.value = r.name; document.getElementById('searchHint').innerText='Ready — click Get Safe Route'; acList.style.display='none'; }
-    };
-    acList.appendChild(div);
+    div.onclick = () => selectPlaceForField(field, r);
+    list.appendChild(div);
   });
 }
 
-searchBox.addEventListener('input', (e)=>{
-  const q = (e.target.value||'').trim();
-  acResults = PresetSearch.search(q);
-  renderAC(acResults);
-});
+function wireAutocomplete(field, inputEl, listEl){
+  inputEl.addEventListener('input', (e)=>{
+    const q = (e.target.value || '').trim();
+    if(field === 'start'){
+      startPlace = null;
+      startResults = PresetSearch.search(q);
+      renderAC('start', startResults);
+    } else {
+      endPlace = null;
+      endResults = PresetSearch.search(q);
+      renderAC('end', endResults);
+    }
+  });
 
-document.addEventListener('click', (ev)=>{ if(!ev.target.closest('#autocomplete-list') && !ev.target.closest('#searchCard')) acList.style.display='none'; });
+  inputEl.addEventListener('focus', ()=>{
+    const r = PresetSearch.search(inputEl.value || '');
+    if(field === 'start') startResults = r;
+    else endResults = r;
+    renderAC(field, r);
+  });
+
+  inputEl.addEventListener('keydown', async (e)=>{
+    const items = listEl.querySelectorAll('.ac-item');
+    let activeIndex = field === 'start' ? startActiveIndex : endActiveIndex;
+    const results = field === 'start' ? startResults : endResults;
+    if(e.key === 'ArrowDown' && items.length){
+      e.preventDefault();
+      activeIndex = Math.min(activeIndex + 1, items.length - 1);
+    } else if(e.key === 'ArrowUp' && items.length){
+      e.preventDefault();
+      activeIndex = Math.max(activeIndex - 1, 0);
+    } else if(e.key === 'Enter'){
+      if(items.length && activeIndex >= 0){
+        e.preventDefault();
+        const chosen = results[activeIndex];
+        if(chosen) selectPlaceForField(field, chosen);
+      } else if(startPlace && endPlace){
+        e.preventDefault();
+        setBusy(true, 'Computing safest route...');
+        try { await computeRouteAndShow(startPlace, endPlace); }
+        finally { setBusy(false, routeStatus.innerText || 'Idle'); }
+      }
+    } else if(e.key === 'Escape'){
+      listEl.style.display='none';
+    }
+
+    items.forEach((item, index)=> item.classList.toggle('active', index === activeIndex));
+    if(field === 'start') startActiveIndex = activeIndex;
+    else endActiveIndex = activeIndex;
+  });
+}
+
+wireAutocomplete('start', startBox, startList);
+wireAutocomplete('end', endBox, endList);
+
+document.addEventListener('click', (ev)=>{
+  if(!ev.target.closest('#searchCard')){
+    startList.style.display='none';
+    endList.style.display='none';
+  }
+});
 
 /* UI Buttons */
 document.getElementById('getRouteBtn').addEventListener('click', async ()=>{
   if(!startPlace || !endPlace){ alert('Please select both Start and Destination (use the search box).'); return; }
-  await computeRouteAndShow(startPlace, endPlace);
+  setBusy(true, 'Computing safest route...');
+  try {
+    await computeRouteAndShow(startPlace, endPlace);
+    routeStatus.innerText = `Route ready: ${startPlace.name} -> ${endPlace.name}`;
+  } finally {
+    setBusy(false, routeStatus.innerText || 'Idle');
+  }
 });
-document.getElementById('clearBtn').addEventListener('click', ()=>{ resetAll(); startPlace=null; endPlace=null; searchBox.value=''; document.getElementById('searchHint').innerText='Start → then Destination'; });
+document.getElementById('swapBtn').addEventListener('click', ()=>{
+  const temp = startPlace;
+  startPlace = endPlace;
+  endPlace = temp;
+  startBox.value = startPlace ? startPlace.name : '';
+  endBox.value = endPlace ? endPlace.name : '';
+  routeStatus.innerText = 'Start and destination swapped';
+});
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  resetAll();
+  startPlace=null;
+  endPlace=null;
+  startBox.value='';
+  endBox.value='';
+  startList.style.display='none';
+  endList.style.display='none';
+  document.getElementById('searchHint').innerText='Choose start and destination';
+  routeStatus.innerText='Idle';
+  riskChip.innerText='Risk: --';
+  riskChip.style.background='#d8ebe7';
+  riskChip.style.color='#245b50';
+});
 document.getElementById('darkToggle').addEventListener('click', ()=>{ darkMode = !darkMode; document.body.setAttribute('data-theme', darkMode ? 'dark' : 'light'); });
 document.getElementById('trafficToggle').addEventListener('click', ()=>{
   trafficOn = !trafficOn;
@@ -271,9 +460,11 @@ document.getElementById('trafficToggle').addEventListener('click', ()=>{
     }
     window._simTrafficLayer.addTo(map);
     document.getElementById('trafficToggle').innerText = 'Traffic On';
+    modeChip.innerText = 'Mode: Traffic';
   } else {
     if(window._simTrafficLayer) map.removeLayer(window._simTrafficLayer);
     document.getElementById('trafficToggle').innerText = 'Traffic';
+    modeChip.innerText = 'Mode: Normal';
   }
 });
 
@@ -346,6 +537,42 @@ function showHotspotsAlong(coords){
   return found;
 }
 
+function formatDistance(meters){
+  if(meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function formatDuration(seconds){
+  const mins = Math.round(seconds / 60);
+  if(mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h} h ${m} min`;
+}
+
+function updateRoutePanel(startName, endName, hotspots, distanceMeters, durationSeconds, source){
+  const panel = document.getElementById('directionsPanel');
+  const topRisk = hotspots.length
+    ? hotspots
+      .slice()
+      .sort((a,b) => a.dist - b.dist)
+      .slice(0,3)
+      .map(h => `<li>${h.h.data.name} (${h.h.data.severity}, ${h.dist} m)</li>`)
+      .join('')
+    : '<li>No hotspots near this route</li>';
+
+  panel.innerHTML = `
+    <div><strong>${startName}</strong> -> <strong>${endName}</strong></div>
+    <div class="small muted" style="margin-top:6px">Source: ${source}</div>
+    <div style="margin-top:8px">Distance: <strong>${distanceMeters ? formatDistance(distanceMeters) : 'Approximate'}</strong></div>
+    <div>ETA: <strong>${durationSeconds ? formatDuration(durationSeconds) : 'Approximate'}</strong></div>
+    <div style="margin-top:8px">Hotspots on route: <strong>${hotspots.length}</strong></div>
+    <ol style="margin:8px 0 0 18px;padding:0">${topRisk}</ol>
+  `;
+  panel.style.display = 'block';
+  updateRiskChip(hotspots);
+}
+
 function visualFallback(s,e){
   const steps = 36;
   const lat1 = s.lat, lon1 = s.lng, lat2 = e.lat, lon2 = e.lng;
@@ -362,6 +589,7 @@ function visualFallback(s,e){
 }
 
 async function computeRouteAndShow(start, end){
+  routeStatus.innerText = 'Snapping start/end to nearest roads...';
   const sSnap = await osrmNearest(start.lat, start.lng);
   const eSnap = await osrmNearest(end.lat, end.lng);
   let routeGot = false, fallbackDone = false;
@@ -370,20 +598,25 @@ async function computeRouteAndShow(start, end){
       fallbackDone = true;
       const coords = visualFallback(sSnap, eSnap);
       drawRouteFromCoords(coords);
-      showHotspotsAlong(coords);
+      const found = showHotspotsAlong(coords);
+      updateRoutePanel(start.name, end.name, found, 0, 0, 'Visual fallback');
+      routeStatus.innerText = 'Using fallback route (network timeout).';
     }
   }, ROUTE_TIMEOUT);
 
   try{
+    routeStatus.innerText = 'Fetching route from OSRM...';
     const routeUrl = `${OSRM_BASE}/route/v1/driving/${sSnap.lng},${sSnap.lat};${eSnap.lng},${eSnap.lat}?overview=full&geometries=geojson`;
     const r = await fetch(routeUrl);
+    if(!r.ok) throw new Error(`Routing HTTP ${r.status}`);
     const j = await r.json();
-    if(j && j.routes && j.routes.length){
+    if(j && j.code === 'Ok' && j.routes && j.routes.length){
       routeGot = true;
       clearTimeout(timer);
       const coords = j.routes[0].geometry.coordinates.map(c => L.latLng(c[1], c[0]));
       drawRouteFromCoords(coords);
-      showHotspotsAlong(coords);
+      const found = showHotspotsAlong(coords);
+      updateRoutePanel(start.name, end.name, found, j.routes[0].distance, j.routes[0].duration, 'OSRM');
       return;
     }
   }catch(e){ console.warn('OSRM fetch failed', e); }
@@ -392,7 +625,9 @@ async function computeRouteAndShow(start, end){
     fallbackDone = true;
     const coords = visualFallback(sSnap, eSnap);
     drawRouteFromCoords(coords);
-    showHotspotsAlong(coords);
+    const found = showHotspotsAlong(coords);
+    updateRoutePanel(start.name, end.name, found, 0, 0, 'Visual fallback');
+    routeStatus.innerText = 'Using fallback route (OSRM unavailable).';
   }
 }
 
@@ -438,7 +673,18 @@ document.getElementById('exportPDF').addEventListener('click', async ()=>{
 });
 
 /* RESET + TTS + BUTTON HOOKS */
-function resetAll(){ if(routeLine) { try{ map.removeLayer(routeLine);}catch(e){} routeLine=null; } visibleHotspots.forEach(x=>{ try{ map.removeLayer(x.marker);}catch(e){} }); visibleHotspots=[]; stopCarAnimation(); document.getElementById('banner').style.display='none'; document.getElementById('directionsPanel').style.display='none'; }
+function resetAll(){
+  if(routeLine) { try{ map.removeLayer(routeLine);}catch(e){} routeLine=null; }
+  visibleHotspots.forEach(x=>{ try{ map.removeLayer(x.marker);}catch(e){} });
+  visibleHotspots=[];
+  allHotspotObjs.forEach(h => {
+    const base = severityColor(h.data.severity);
+    h.m.setStyle({ color: base, fillColor: base, radius: 8 });
+  });
+  stopCarAnimation();
+  document.getElementById('banner').style.display='none';
+  document.getElementById('directionsPanel').style.display='none';
+}
 function speak(txt){ try{ window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(txt)); }catch(e){} }
 
 document.getElementById('playCar').addEventListener('click', startCarAnimation);
@@ -446,9 +692,6 @@ document.getElementById('stopCar').addEventListener('click', stopCarAnimation);
 
 /* INITIALIZE */
 PresetSearch.init();
-// quick focus behavior
-searchBox.addEventListener('focus', ()=>{ const r = PresetSearch.search(''); acResults = r; renderAC(r); });
-searchBox.placeholder = 'Start: type to search...';
 
 </script>
 </body>
