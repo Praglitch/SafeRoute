@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SafeRoute — Demo Pro (Single File)</title>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<style>
+  :root{
+    --card-bg: #ffffff;
+    --text: #222;
+    --primary: #1976d2;
+  }
+  [data-theme="dark"]{
+    --card-bg: #0f1720;
+    --text: #e6eef6;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,Arial,Helvetica,sans-serif;color:var(--text)}
+  #map{position:absolute;inset:0}
+  .top-floating{
+    position:absolute;left:16px;top:16px;z-index:1200;
+    background:var(--card-bg);padding:12px;border-radius:10px;box-shadow:0 8px 30px rgba(8,15,30,0.12);
+    display:flex;gap:10px;align-items:center;min-width:420px;
+  }
+  .search-input{
+    background:transparent;border:1px solid #d0d7de;padding:8px 10px;border-radius:8px;width:300px;font-size:14px;color:var(--text)
+  }
+  .btn{background:var(--primary);border:none;color:white;padding:9px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+  .btn.secondary{background:#4caf50}
+  .small{font-size:12px;color:#666}
+  #banner{position:absolute;left:50%;transform:translateX(-50%);top:86px;z-index:1200;padding:10px 16px;border-radius:10px;background:#d32f2f;color:white;font-weight:700;display:none;box-shadow:0 10px 30px rgba(0,0,0,0.15)}
+  .controls-right{position:absolute;right:16px;top:16px;z-index:1200;display:flex;flex-direction:column;gap:10px}
+  .control-card{background:var(--card-bg);padding:10px;border-radius:10px;box-shadow:0 8px 20px rgba(8,15,30,0.08)}
+  .legend{position:absolute;left:16px;bottom:16px;z-index:1200;background:var(--card-bg);padding:8px;border-radius:8px;box-shadow:0 8px 20px rgba(8,15,30,0.08)}
+  .dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  #directionsPanel{position:absolute;right:16px;bottom:80px;z-index:1200;width:320px;max-height:48vh;overflow:auto;background:var(--card-bg);padding:10px;border-radius:8px;box-shadow:0 8px 30px rgba(8,15,30,0.12);display:none}
+  #autocomplete-list{position:absolute;left:16px;top:66px;z-index:1300;max-height:240px;overflow:auto;background:var(--card-bg);border-radius:8px;padding:8px;box-shadow:0 8px 30px rgba(0,0,0,0.12);display:none}
+  .ac-item{padding:8px;border-radius:6px;cursor:pointer}
+  .ac-item:hover{background:#f0f4f8}
+  .muted{font-size:12px;color:#666}
+  .car-btn{background:#ff6f00;padding:8px;border-radius:8px;color:#fff;border:none;cursor:pointer;font-weight:700}
+</style>
+</head>
+<body data-theme="light">
+
+<!-- Floating search -->
+<div class="top-floating" id="searchCard">
+  <input id="searchBox" class="search-input" placeholder="Where from? Start typing (preset suggestions)" autocomplete="off" />
+  <div style="display:flex;flex-direction:column">
+    <div class="small muted" id="searchHint">Start → then Destination</div>
+  </div>
+  <button class="btn" id="getRouteBtn">Get Safe Route</button>
+  <button class="btn secondary" id="clearBtn">Clear</button>
+</div>
+
+<!-- Autocomplete list (preset) -->
+<div id="autocomplete-list"></div>
+
+<!-- Right-side controls -->
+<div class="controls-right">
+  <div class="control-card">
+    <label class="small">Mode</label><br>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button id="darkToggle" class="btn">Dark</button>
+      <button id="trafficToggle" class="btn">Traffic</button>
+    </div>
+  </div>
+
+  <div class="control-card">
+    <label class="small">Export</label><br>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button id="exportPNG" class="btn">Export PNG</button>
+      <button id="exportPDF" class="btn">Export PDF</button>
+    </div>
+  </div>
+
+  <div class="control-card">
+    <label class="small">Play</label><br>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button id="playCar" class="car-btn">▶ Car</button>
+      <button id="stopCar" class="btn secondary">■ Stop</button>
+    </div>
+  </div>
+</div>
+
+<div id="banner">⚠️ Accident hotspots detected ON YOUR ROUTE</div>
+<div id="map"></div>
+<div id="directionsPanel"></div>
+<div class="legend">
+  <div><span class="dot" style="background:red"></span>High</div>
+  <div><span class="dot" style="background:orange"></span>Medium</div>
+  <div><span class="dot" style="background:yellow"></span>Low</div>
+  <div><span class="dot" style="background:purple"></span>On Route</div>
+</div>
+
+<!-- Libraries -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<!-- INLINE: preset search (replaces external search-places.js) -->
+<script>
+var PresetSearch = (function(){
+  const places = [
+    { name: "Sector 62 Noida", lat:28.6315, lng:77.3688, desc:"Noida" },
+    { name: "Sector 18 Noida", lat:28.5672, lng:77.3266, desc:"Noida DND" },
+    { name: "Noida City Centre", lat:28.5705, lng:77.3240 },
+    { name: "Akshardham Delhi", lat:28.6187, lng:77.2773 },
+    { name: "Mayur Vihar Phase 1", lat:28.5961, lng:77.3024 },
+    { name: "Yamuna Bank", lat:28.5920, lng:77.2871 },
+    { name: "Connaught Place", lat:28.6319, lng:77.2167 },
+    { name: "India Gate", lat:28.6129, lng:77.2295 },
+    { name: "Lajpat Nagar", lat:28.5716, lng:77.2440 },
+    { name: "Lotus Temple", lat:28.5535, lng:77.2588 },
+    { name: "Hauz Khas", lat:28.5488, lng:77.2000 },
+    { name: "Ghaziabad Railway Station", lat:28.6663, lng:77.4325 },
+    { name: "Vaishali Metro", lat:28.6418, lng:77.3319 },
+    { name: "Kaushambi", lat:28.6285, lng:77.3628 },
+    { name: "Indirapuram", lat:28.6229, lng:77.3783 },
+    { name: "Raj Nagar Extension", lat:28.7027, lng:77.4475 },
+    { name: "Hazrat Nizamuddin", lat:28.5673, lng:77.2506 },
+    { name: "Akshardham Flyover", lat:28.6198, lng:77.2764 },
+    { name: "GT Road", lat:28.7200, lng:77.0800 },
+    { name: "Anand Vihar", lat:28.6517, lng:77.3155 },
+    { name: "Rohini", lat:28.7210, lng:77.1111 },
+    { name: "Dwarka", lat:28.5950, lng:77.0170 },
+    { name: "Saket", lat:28.5245, lng:77.2120 },
+    { name: "Janakpuri", lat:28.6244, lng:77.0643 },
+    { name: "New Delhi Railway", lat:28.6383, lng:77.2195 },
+    { name: "Karol Bagh", lat:28.6528, lng:77.1855 },
+    { name: "Kalkaji", lat:28.5550, lng:77.2581 },
+    { name: "Noida Sector 62 Bus Stand", lat:28.6320, lng:77.3695 },
+    { name: "Sector 15 Noida", lat:28.5743, lng:77.3196 },
+    { name: "Sec 128 Noida", lat:28.5547, lng:77.3534 },
+    { name: "Faridabad", lat:28.4089, lng:77.3178 },
+    { name: "Gurugram", lat:28.4595, lng:77.0266 },
+    { name: "NH-24 Ghaziabad Crossing", lat:28.6851, lng:77.4411 },
+    { name: "Sarita Vihar", lat:28.5290, lng:77.2958 },
+    { name: "Mayur Vihar Extension", lat:28.6020, lng:77.3100 },
+    { name: "Saket Metro", lat:28.5320, lng:77.2049 },
+    { name: "AIIMS", lat:28.5670, lng:77.2100 },
+    { name: "GTB Nagar", lat:28.6665, lng:77.2189 },
+    { name: "Pragati Maidan", lat:28.6311, lng:77.2435 },
+    { name: "Rajiv Chowk", lat:28.6319, lng:77.2167 },
+    { name: "Bhikaji Cama Place", lat:28.5671, lng:77.1601 },
+    { name: "Okhla", lat:28.5394, lng:77.2703 },
+    { name: "Okhla Phase 2", lat:28.5535, lng:77.2692 }
+  ];
+
+  let idx = [];
+  function init(){ idx = places.map(p => ({ name: p.name.toLowerCase(), full: p })); }
+  function search(q){
+    if(!q) return places.slice(0,10);
+    q = q.toLowerCase();
+    const out = idx.filter(i => i.name.includes(q)).map(i=>i.full);
+    if(out.length===0){
+      const pre = idx.filter(i => i.name.split(' ').some(part => part.startsWith(q))).map(i=>i.full);
+      return pre.length ? pre.slice(0,10) : places.slice(0,10);
+    }
+    return out.slice(0,12);
+  }
+  function bestMatch(q){
+    q = (q||'').toLowerCase();
+    let best = places.find(p => p.name.toLowerCase()===q);
+    if(best) return best;
+    best = places.find(p => p.name.toLowerCase().includes(q));
+    return best || places[0];
+  }
+  return { init, search, bestMatch, data: places };
+})();
+PresetSearch.init();
+</script>
+
+<!-- INLINE: hotspots dataset -->
+<script>
+var accidentHotspots = [
+  { name: "Sector 62 Junction (Noida)", lat:28.6315, lng:77.3688, severity: "High" },
+  { name: "Sector 18 DND Approach (Noida)", lat:28.5672, lng:77.3266, severity: "High" },
+  { name: "Akshardham Flyover (Delhi)", lat:28.6198, lng:77.2764, severity: "High" },
+  { name: "Mayur Vihar Phase 1 Intersection", lat:28.5961, lng:77.3024, severity: "Medium" },
+  { name: "Yamuna Bank Loop", lat:28.5920, lng:77.2871, severity: "Medium" },
+  { name: "Sarita Vihar Underpass", lat:28.5290, lng:77.2958, severity: "Medium" },
+  { name: "NH-24 Ghaziabad Crossing", lat:28.6851, lng:77.4411, severity: "High" },
+  { name: "Raj Nagar Extension (Ghaziabad)", lat:28.7027, lng:77.4475, severity: "Low" },
+  { name: "Noida City Centre (Metro)", lat:28.5705, lng:77.3240, severity: "Low" },
+  { name: "Connaught Place (Rajiv Chowk)", lat:28.6319, lng:77.2167, severity: "Medium" },
+  { name: "India Gate Vicinity", lat:28.6129, lng:77.2295, severity: "Low" },
+  { name: "Lotus Temple Intersection", lat:28.5535, lng:77.2588, severity: "Low" },
+  { name: "Indirapuram Intersection", lat:28.6229, lng:77.3783, severity: "Medium" },
+  { name: "Vaishali Metro Junction", lat:28.6418, lng:77.3319, severity: "High" },
+  { name: "Anand Vihar Bus Terminal", lat:28.6517, lng:77.3155, severity: "Medium" }
+];
+</script>
+
+<!-- MAIN APP SCRIPT -->
+<script>
+/* CONFIG */
+const THRESHOLD = 3000;
+const OSRM_BASE = 'https://router.project-osrm.org';
+const ROUTE_TIMEOUT = 7000;
+
+let trafficOn = false;
+let darkMode = false;
+
+/* MAP INIT */
+const map = L.map('map', { zoomControl: true }).setView([28.63,77.37], 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+
+let routeLine = null, visibleHotspots = [], allHotspotObjs = [];
+let carMarker = null, carAnimHandle = null;
+
+/* BUILD HOTSPOT MARKERS */
+accidentHotspots.forEach(h=>{
+  const color = h.severity==='High' ? 'red' : (h.severity==='Medium' ? 'orange' : 'yellow');
+  const m = L.circleMarker([h.lat,h.lng], { radius:8, color, fillColor: color, fillOpacity:0.9 });
+  m.bindPopup(`<b>${h.name}</b><br/>Severity: ${h.severity}`);
+  allHotspotObjs.push({ m, data: h });
+});
+
+/* AUTOCOMPLETE UI */
+const searchBox = document.getElementById('searchBox');
+const acList = document.getElementById('autocomplete-list');
+let startPlace = null, endPlace = null;
+let acResults = [];
+
+function renderAC(results){
+  acList.innerHTML = '';
+  if(!results || !results.length){ acList.style.display='none'; return; }
+  acList.style.display='block';
+  results.slice(0,10).forEach((r, idx)=>{
+    const div = document.createElement('div');
+    div.className = 'ac-item';
+    div.innerHTML = `<strong>${r.name}</strong><div class="muted small">${r.desc || ''}</div>`;
+    div.onclick = () => {
+      if(!startPlace){ startPlace = r; searchBox.value = r.name; document.getElementById('searchHint').innerText='Now choose Destination'; searchBox.placeholder='Enter Destination...'; searchBox.value=''; }
+      else { endPlace = r; searchBox.value = r.name; document.getElementById('searchHint').innerText='Ready — click Get Safe Route'; acList.style.display='none'; }
+    };
+    acList.appendChild(div);
+  });
+}
+
+searchBox.addEventListener('input', (e)=>{
+  const q = (e.target.value||'').trim();
+  acResults = PresetSearch.search(q);
+  renderAC(acResults);
+});
+
+document.addEventListener('click', (ev)=>{ if(!ev.target.closest('#autocomplete-list') && !ev.target.closest('#searchCard')) acList.style.display='none'; });
+
+/* UI Buttons */
+document.getElementById('getRouteBtn').addEventListener('click', async ()=>{
+  if(!startPlace || !endPlace){ alert('Please select both Start and Destination (use the search box).'); return; }
+  await computeRouteAndShow(startPlace, endPlace);
+});
+document.getElementById('clearBtn').addEventListener('click', ()=>{ resetAll(); startPlace=null; endPlace=null; searchBox.value=''; document.getElementById('searchHint').innerText='Start → then Destination'; });
+document.getElementById('darkToggle').addEventListener('click', ()=>{ darkMode = !darkMode; document.body.setAttribute('data-theme', darkMode ? 'dark' : 'light'); });
+document.getElementById('trafficToggle').addEventListener('click', ()=>{
+  trafficOn = !trafficOn;
+  if(trafficOn){
+    if(!window._simTrafficLayer){
+      window._simTrafficLayer = L.layerGroup();
+      const lines = [
+        [[28.59,77.31],[28.60,77.32],[28.61,77.30]],
+        [[28.62,77.34],[28.605,77.33],[28.59,77.35]]
+      ];
+      lines.forEach(l=> L.polyline(l,{color:'#ff3b30',weight:6,opacity:0.45}).addTo(window._simTrafficLayer));
+    }
+    window._simTrafficLayer.addTo(map);
+    document.getElementById('trafficToggle').innerText = 'Traffic On';
+  } else {
+    if(window._simTrafficLayer) map.removeLayer(window._simTrafficLayer);
+    document.getElementById('trafficToggle').innerText = 'Traffic';
+  }
+});
+
+/* ROUTING HELPERS */
+async function osrmNearest(lat,lng){
+  try{
+    const url = `${OSRM_BASE}/nearest/v1/driving/${lng},${lat}?number=1`;
+    const res = await fetch(url);
+    if(!res.ok) return {lat,lng};
+    const j = await res.json();
+    if(j && j.waypoints && j.waypoints[0] && j.waypoints[0].location) {
+      return {lat: j.waypoints[0].location[1], lng: j.waypoints[0].location[0]};
+    }
+  }catch(e){}
+  return {lat,lng};
+}
+
+function drawRouteFromCoords(coords){
+  if(routeLine) map.removeLayer(routeLine);
+  routeLine = L.polyline(coords, {color:'#1976d2', weight:6, opacity:0.9}).addTo(map);
+  map.fitBounds(routeLine.getBounds(), {padding:[50,50]});
+}
+
+function distanceToSegment(latlng, A, B){
+  const p = map.latLngToLayerPoint(latlng);
+  const a = map.latLngToLayerPoint(A);
+  const b = map.latLngToLayerPoint(B);
+  const vx = b.x - a.x, vy = b.y - a.y;
+  const wx = p.x - a.x, wy = p.y - a.y;
+  const c1 = vx*wx + vy*wy;
+  const c2 = vx*vx + vy*vy;
+  let t = c2===0 ? 0 : c1/c2;
+  t = Math.max(0, Math.min(1, t));
+  const proj = L.point(a.x + t*vx, a.y + t*vy);
+  const distPx = p.distanceTo(proj);
+  const latlng2 = map.layerPointToLatLng(L.point(p.x+1,p.y));
+  const metersPerPx = latlng.distanceTo(latlng2);
+  return distPx * metersPerPx;
+}
+
+function showHotspotsAlong(coords){
+  visibleHotspots.forEach(x=>{ try{ map.removeLayer(x.marker); }catch(e){} });
+  visibleHotspots = [];
+  let found = [];
+  allHotspotObjs.forEach(h=>{
+    const pt = L.latLng(h.data.lat, h.data.lng);
+    let min = Infinity;
+    for(let i=0;i<coords.length-1;i++){
+      const d = distanceToSegment(pt, coords[i], coords[i+1]);
+      if(d < min) min = d;
+    }
+    if(min <= THRESHOLD){
+      found.push({h,dist: Math.round(min)});
+    }
+  });
+  if(found.length>0) document.getElementById('banner').style.display='block'; else document.getElementById('banner').style.display='none';
+  found.forEach((f, idx)=>{
+    f.h.m.setStyle({color:'purple', fillColor:'purple', radius:10});
+    f.h.m.addTo(map);
+    visibleHotspots.push({ marker: f.h.m, data: f.h.data, dist: f.dist });
+    setTimeout(()=> { try{ f.h.m.openPopup(); }catch(e){} }, 400+idx*400);
+  });
+  if(found.length>0){
+    found.sort((a,b)=>a.dist-b.dist);
+    const msg = `${found.length} accident hotspot${found.length>1?'s':''} on your route. Nearest: ${found[0].h.data.name}, ${found[0].dist} meters.`;
+    speak(msg);
+  } else {
+    speak('Route computed. No accident hotspots within threshold.');
+  }
+  return found;
+}
+
+function visualFallback(s,e){
+  const steps = 36;
+  const lat1 = s.lat, lon1 = s.lng, lat2 = e.lat, lon2 = e.lng;
+  const midLat = (lat1 + lat2)/2 + 0.008;
+  const midLng = (lon1 + lon2)/2 - 0.006;
+  const pts = [];
+  for(let i=0;i<=steps;i++){
+    const t = i/steps;
+    const lat = (1-t)*(1-t)*lat1 + 2*(1-t)*t*midLat + t*t*lat2;
+    const lon = (1-t)*(1-t)*lon1 + 2*(1-t)*t*midLng + t*t*lon2;
+    pts.push(L.latLng(lat, lon));
+  }
+  return pts;
+}
+
+async function computeRouteAndShow(start, end){
+  const sSnap = await osrmNearest(start.lat, start.lng);
+  const eSnap = await osrmNearest(end.lat, end.lng);
+  let routeGot = false, fallbackDone = false;
+  const timer = setTimeout(()=>{
+    if(!routeGot && !fallbackDone){
+      fallbackDone = true;
+      const coords = visualFallback(sSnap, eSnap);
+      drawRouteFromCoords(coords);
+      showHotspotsAlong(coords);
+    }
+  }, ROUTE_TIMEOUT);
+
+  try{
+    const routeUrl = `${OSRM_BASE}/route/v1/driving/${sSnap.lng},${sSnap.lat};${eSnap.lng},${eSnap.lat}?overview=full&geometries=geojson`;
+    const r = await fetch(routeUrl);
+    const j = await r.json();
+    if(j && j.routes && j.routes.length){
+      routeGot = true;
+      clearTimeout(timer);
+      const coords = j.routes[0].geometry.coordinates.map(c => L.latLng(c[1], c[0]));
+      drawRouteFromCoords(coords);
+      showHotspotsAlong(coords);
+      return;
+    }
+  }catch(e){ console.warn('OSRM fetch failed', e); }
+
+  if(!fallbackDone){
+    fallbackDone = true;
+    const coords = visualFallback(sSnap, eSnap);
+    drawRouteFromCoords(coords);
+    showHotspotsAlong(coords);
+  }
+}
+
+/* CAR ANIMATION */
+function startCarAnimation(){
+  if(!routeLine) return alert('No route to animate. Draw a route first.');
+  stopCarAnimation();
+  const latlngs = routeLine.getLatLngs();
+  if(!latlngs || latlngs.length<2) return;
+  let idx = 0;
+  const carIcon = L.divIcon({
+    className: '',
+    html: `<svg width="36" height="20" viewBox="0 0 36 20" xmlns="http://www.w3.org/2000/svg"><rect rx="4" ry="4" width="36" height="14" fill="#ff6f00"/></svg>`,
+    iconAnchor: [18, 10]
+  });
+  carMarker = L.marker(latlngs[0], {icon: carIcon}).addTo(map);
+  carAnimHandle = setInterval(()=>{
+    idx++;
+    if(idx >= latlngs.length) { idx = latlngs.length-1; stopCarAnimation(); return; }
+    carMarker.setLatLng(latlngs[idx]);
+  }, 220);
+}
+function stopCarAnimation(){ if(carAnimHandle) { clearInterval(carAnimHandle); carAnimHandle = null; } if(carMarker){ try{ map.removeLayer(carMarker); }catch(e){} carMarker=null; } }
+
+/* EXPORT */
+document.getElementById('exportPNG').addEventListener('click', async ()=>{
+  document.getElementById('banner').style.display='none';
+  try{
+    const canvas = await html2canvas(document.getElementById('map'), {useCORS:true, logging:false});
+    const dataURL = canvas.toDataURL('image/png');
+    const a = document.createElement('a'); a.href = dataURL; a.download = 'SafeRoute_map.png'; a.click();
+  }catch(e){ alert('Export failed: ' + e.message); }
+});
+document.getElementById('exportPDF').addEventListener('click', async ()=>{
+  try{
+    const canvas = await html2canvas(document.getElementById('map'), {useCORS:true, logging:false});
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'landscape', unit:'px', format:[canvas.width, canvas.height] });
+    pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+    pdf.save('SafeRoute_map.pdf');
+  }catch(e){ alert('PDF export failed: ' + e.message); }
+});
+
+/* RESET + TTS + BUTTON HOOKS */
+function resetAll(){ if(routeLine) { try{ map.removeLayer(routeLine);}catch(e){} routeLine=null; } visibleHotspots.forEach(x=>{ try{ map.removeLayer(x.marker);}catch(e){} }); visibleHotspots=[]; stopCarAnimation(); document.getElementById('banner').style.display='none'; document.getElementById('directionsPanel').style.display='none'; }
+function speak(txt){ try{ window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(txt)); }catch(e){} }
+
+document.getElementById('playCar').addEventListener('click', startCarAnimation);
+document.getElementById('stopCar').addEventListener('click', stopCarAnimation);
+
+/* INITIALIZE */
+PresetSearch.init();
+// quick focus behavior
+searchBox.addEventListener('focus', ()=>{ const r = PresetSearch.search(''); acResults = r; renderAC(r); });
+searchBox.placeholder = 'Start: type to search...';
+
+</script>
+</body>
+</html>
